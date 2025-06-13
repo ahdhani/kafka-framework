@@ -32,12 +32,14 @@ class KafkaConsumerManager:
         self.routers = routers
         self.serializer = serializer
         self.topics: set[str] = set()
+        self.route_handler_map: dict[str, EventHandler] = {}
         self.priority_queue: PriorityQueue = PriorityQueue()
         self.running = False
 
         # Collect all topics from routers
         for router in self.routers:
             self.topics.update(router.get_topics())
+            self.route_handler_map.update(router.get_route_handler_map())
 
     async def start(self) -> None:
         """Start the consumer."""
@@ -65,40 +67,32 @@ class KafkaConsumerManager:
                 for _tp, messages in batch.items():
                     for message in messages:
                         await self._handle_message(message)
+
+                await self._process_priority_queue()
             except Exception as e:
                 logger.error(f"Error processing messages: {e}")
 
     async def _handle_message(self, message: ConsumerRecord) -> None:
         """Handle a single message."""
         try:
+            if message.headers.event_name is not None:
+                route = f"{message.topic}.{message.headers.event_name}"
+            else:
+                route = message.topic
+
+            if route not in self.route_handler_map:
+                logger.warning(f"No handler found for message: {message}")
+                return
+
+            handler = self.route_handler_map[route]
             # Deserialize the message
             value = await self.serializer.deserialize(message.value)
 
             # Create KafkaMessage instance
             kafka_message = KafkaMessage.from_aiokafka(message, value)
 
-            # Find the appropriate handler
-            handler = None
-            for router in self.routers:
-                for event, event_handler in router.routes.get(message.topic, {}).items():
-                    if event in str(value):  # Simple event matching
-                        handler = event_handler
-                        break
-                if handler:
-                    break
-
-            if not handler:
-                logger.warning(f"No handler found for message: {message}")
-                return
-
-            # Add to priority queue
-            priority = handler.priority
-            if kafka_message.headers.retry:
-                # Lower priority for retried messages
-                priority += kafka_message.headers.retry.retry_count
-
-            self.priority_queue.put((priority, (handler, kafka_message)))
-            await self._process_priority_queue()
+            await self.priority_queue.put((handler.priority, (handler, kafka_message)))
+            # await self._process_priority_queue()
 
         except Exception as e:
             logger.error(f"Error handling message: {e}")

@@ -22,17 +22,17 @@ class EventHandler:
 
 class TopicRouter:
     """
-    Router for Kafka topics and events.
-    Similar to FastAPI's APIRouter.
+    Router for handling Kafka topic events.
     """
 
     def __init__(self):
-        self.routes: dict[str, dict[str, EventHandler]] = {}
+        self.route_handler_map: dict[str, EventHandler] = {}
+        self.topics: set[str] = set()
 
     def topic_event(
         self,
         topic: str,
-        event_name: str,
+        event_name: str | None = None,
         *,
         priority: int = 1,
         retry_attempts: int = 0,
@@ -41,27 +41,37 @@ class TopicRouter:
         """Decorator for registering topic event handlers."""
 
         def decorator(func: Callable) -> Callable:
-            if topic not in self.routes:
-                self.routes[topic] = {}
-
-            # Get dependencies from function signature
+            # Get dependencies from function
             dependant = get_dependant(func)
 
-            self.routes[topic][event_name] = EventHandler(
+            route = self.get_route(topic, event_name)
+            self.route_handler_map[route] = EventHandler(
                 func=func,
                 priority=priority,
                 retry_attempts=retry_attempts,
                 dlq_topic=dlq_topic,
                 dependencies=dependant.dependencies,
             )
+            self.topics.add(topic)
+
             return func
 
         return decorator
 
-    def get_handler(self, topic: str, event_name: str) -> EventHandler | None:
-        """Get the handler for a topic and event."""
-        return self.routes.get(topic, {}).get(event_name)
+    @staticmethod
+    def get_route(topic: str, event_name: str | None = None) -> str:
+        if event_name is not None:
+            return f"{topic}.{event_name}"
+        return topic
 
-    def get_topics(self) -> list[str]:
+    def get_handler(self, topic: str, event_name: str | None = None) -> EventHandler | None:
+        """Get the handler for a topic and event."""
+        return self.route_handler_map.get(self.get_route(topic, event_name))
+
+    def get_route_handler_map(self) -> dict[str, EventHandler]:
+        """Get all registered route_handler_map."""
+        return self.route_handler_map
+
+    def get_topics(self) -> set[str]:
         """Get all registered topics."""
-        return list(self.routes.keys())
+        return self.topics

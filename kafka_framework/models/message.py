@@ -27,6 +27,7 @@ class MessageHeaders:
     data_version: str
     retry: RetryInfo | None = None
     custom_headers: dict[str, Any] = None
+    event_name: str | None = None
 
 
 @dataclass
@@ -40,7 +41,6 @@ class KafkaMessage:
     topic: str
     partition: int
     offset: int
-    timestamp: datetime
     key: bytes | None = None
 
     @classmethod
@@ -65,7 +65,9 @@ class KafkaMessage:
             data_version=headers_dict.get("data_version", "1.0"),
             retry=retry_info,
             custom_headers={
-                k: v for k, v in headers_dict.items() if k not in ["data_version", "retry"]
+                k: v
+                for k, v in headers_dict.items()
+                if k not in ["data_version", "retry", "timestamp"]
             },
         )
 
@@ -75,6 +77,5 @@ class KafkaMessage:
             topic=message.topic,
             partition=message.partition,
             offset=message.offset,
-            timestamp=datetime.fromtimestamp(message.timestamp / 1000),
             key=message.key,
         )
