@@ -1,13 +1,14 @@
 """
 Exceptions module for the Kafka framework.
 """
+
 from .handlers import (
-    KafkaFrameworkError,
-    SerializationError,
     ConsumerError,
+    KafkaFrameworkError,
+    NonRetryableError,
     ProducerError,
     RetryableError,
-    NonRetryableError,
+    SerializationError,
     handle_exceptions,
     is_retryable,
 )

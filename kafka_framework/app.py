@@ -1,8 +1,9 @@
 """
 Main KafkaApp class implementation.
 """
+
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
@@ -20,13 +21,13 @@ class KafkaApp:
     """
 
     def __init__(
-            self,
-            *,
-            bootstrap_servers: Union[str, List[str]],
-            group_id: Optional[str] = None,
-            client_id: Optional[str] = None,
-            serializer: Optional[BaseSerializer] = None,
-            config: Optional[Dict[str, Any]] = None,
+        self,
+        *,
+        bootstrap_servers: str | list[str],
+        group_id: str | None = None,
+        client_id: str | None = None,
+        serializer: BaseSerializer | None = None,
+        config: dict[str, Any] | None = None,
     ):
         if isinstance(bootstrap_servers, str):
             bootstrap_servers = [bootstrap_servers]
@@ -37,9 +38,9 @@ class KafkaApp:
         self.serializer = serializer or JSONSerializer()
         self.config = KafkaConfig(**(config or {}))
 
-        self.routers: List[TopicRouter] = []
-        self._consumer: Optional[KafkaConsumerManager] = None
-        self._producer: Optional[KafkaProducerManager] = None
+        self.routers: list[TopicRouter] = []
+        self._consumer: KafkaConsumerManager | None = None
+        self._producer: KafkaProducerManager | None = None
         self._startup_done = False
 
     def include_router(self, router: TopicRouter) -> None:
@@ -52,7 +53,7 @@ class KafkaApp:
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             client_id=self.client_id,
-            **self.config.consumer_config
+            **self.config.consumer_config,
         )
         self._consumer = KafkaConsumerManager(
             consumer=consumer,
@@ -65,7 +66,7 @@ class KafkaApp:
         producer = AIOKafkaProducer(
             bootstrap_servers=self.bootstrap_servers,
             client_id=self.client_id,
-            **self.config.producer_config
+            **self.config.producer_config,
         )
         self._producer = KafkaProducerManager(
             producer=producer,

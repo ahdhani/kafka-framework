@@ -1,20 +1,22 @@
 """
 Kafka producer implementation.
 """
-from typing import Any, Dict, Optional
+
 import logging
+from typing import Any
 
 from aiokafka import AIOKafkaProducer
-from aiokafka.errors import KafkaError
 
 from ..serialization import BaseSerializer
 
 logger = logging.getLogger(__name__)
 
+
 class KafkaProducerManager:
     """
     Manages Kafka producer operations.
     """
+
     def __init__(
         self,
         producer: AIOKafkaProducer,
@@ -22,27 +24,27 @@ class KafkaProducerManager:
     ):
         self.producer = producer
         self.serializer = serializer
-        
+
     async def start(self) -> None:
         """Start the producer."""
         await self.producer.start()
-        
+
     async def stop(self) -> None:
         """Stop the producer."""
         await self.producer.stop()
-        
+
     async def send(
         self,
         topic: str,
         value: Any,
-        key: Optional[bytes] = None,
-        partition: Optional[int] = None,
-        timestamp_ms: Optional[int] = None,
-        headers: Optional[Dict[str, Any]] = None,
+        key: bytes | None = None,
+        partition: int | None = None,
+        timestamp_ms: int | None = None,
+        headers: dict[str, Any] | None = None,
     ) -> None:
         """
         Send a message to Kafka.
-        
+
         Args:
             topic: Topic to send the message to
             value: Message value
@@ -53,16 +55,13 @@ class KafkaProducerManager:
         """
         try:
             # Serialize the value
-            serialized_value = await self.serializer.serialize(value, topic, headers)
-            
+            serialized_value = await self.serializer.serialize(value)
+
             # Convert headers to list of tuples if present
             kafka_headers = None
             if headers:
-                kafka_headers = [
-                    (str(k).encode(), str(v).encode())
-                    for k, v in headers.items()
-                ]
-                
+                kafka_headers = [(str(k).encode(), str(v).encode()) for k, v in headers.items()]
+
             # Send the message
             await self.producer.send(
                 topic,
@@ -72,7 +71,7 @@ class KafkaProducerManager:
                 timestamp_ms=timestamp_ms,
                 headers=kafka_headers,
             )
-            
+
         except Exception as e:
             logger.error(f"Error sending message to {topic}: {e}")
             raise
