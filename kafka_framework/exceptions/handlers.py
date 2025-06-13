@@ -99,9 +99,5 @@ def is_retryable(exception: Exception) -> bool:
     if isinstance(exception, NonRetryableError):
         return False
 
-    # Explicitly retryable errors
-    if isinstance(exception, RetryableError):
-        return True
-
     # Default retry behavior for other exceptions
     return True

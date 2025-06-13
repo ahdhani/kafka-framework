@@ -4,10 +4,10 @@ Kafka consumer implementation with priority queues and retry mechanism.
 
 import asyncio
 import logging
-from datetime import datetime
-from queue import PriorityQueue
+from asyncio import PriorityQueue
 
-from aiokafka import AIOKafkaConsumer, ConsumerRecord
+from aiokafka import AIOKafkaConsumer
+from aiokafka.structs import ConsumerRecord
 
 from ..dependencies import DependencyCache, solve_dependencies
 from ..models import KafkaMessage
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class KafkaConsumerManager:
     """
-    Manages Kafka consumer operations with priority queues and retries.
+    Manages Kafka consumer operations with priority queues and routing.
     """
 
     def __init__(
@@ -130,16 +130,16 @@ class KafkaConsumerManager:
 
         if retry_count < handler.retry_attempts:
             # Retry the message
-            {
-                "topic": message.topic,
-                "partition": message.partition,
-                "offset": message.offset,
-                "retry_count": retry_count + 1,
-                "event_name": message.headers.retry.event_name
-                if message.headers.retry
-                else "unknown",
-                "last_retried_timestamp": datetime.now().timestamp(),
-            }
+            # {
+            #     "topic": message.topic,
+            #     "partition": message.partition,
+            #     "offset": message.offset,
+            #     "retry_count": retry_count + 1,
+            #     "event_name": message.headers.retry.event_name
+            #     if message.headers.retry
+            #     else "unknown",
+            #     "last_retried_timestamp": datetime.now().timestamp(),
+            # }
 
             # Add to priority queue with lower priority
             self.priority_queue.put((handler.priority + retry_count + 1, (handler, message)))

@@ -6,7 +6,7 @@ import asyncio
 from datetime import datetime
 
 from kafka_framework import Depends, KafkaApp, TopicRouter
-from kafka_framework.exceptions import RetryableError, handle_exceptions
+from kafka_framework.exceptions import RetryableError
 from kafka_framework.serialization import JSONSerializer
 
 # Create the app instance
@@ -54,7 +54,6 @@ async def handle_order_created(message, db=Depends(get_db), config=Depends(get_c
 @router.topic_event(
     "orders", "order_cancelled", priority=2, retry_attempts=3, dlq_topic="orders_dlq"
 )
-@handle_exceptions(ValueError, handler=lambda e, msg: print(f"Error: {e}"))
 async def handle_order_cancelled(message):
     """Handle order cancellation events."""
     order = message.value

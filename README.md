@@ -171,20 +171,6 @@ app = KafkaApp(
 )
 ```
 
-### Exception Handling
-
-Use the exception handling decorator:
-
-```python
-from kafka_framework.exceptions import handle_exceptions
-
-@handle_exceptions(ValueError, handler=my_error_handler)
-@router.topic_event("users", "user_created")
-async def handle_user(message):
-    # Exception handling with custom handler
-    pass
-```
-
 ### Message Headers
 
 Access message headers and metadata:
@@ -194,11 +180,11 @@ Access message headers and metadata:
 async def handle_order(message):
     # Access message data
     order_data = message.value
-    
+
     # Access message headers
     print(f"Data version: {message.headers.data_version}")
     print(f"Timestamp: {message.headers.timestamp}")
-    
+
     # Access retry information (if being retried)
     if message.headers.retry:
         print(f"Retry count: {message.headers.retry.retry_count}")
