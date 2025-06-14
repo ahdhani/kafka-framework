@@ -13,6 +13,7 @@ from aiokafka import AIOKafkaConsumer
 from aiokafka.structs import ConsumerRecord
 
 from ..dependencies import DependencyCache, get_dependant, solve_dependencies
+from ..middleware.base import BaseMiddleware
 from ..models import KafkaMessage, RetryInfo
 from ..routing import EventHandler, TopicRouter
 from ..serialization import BaseSerializer
@@ -35,6 +36,7 @@ class KafkaConsumerManager:
         max_batch_size: int = 100,
         consumer_timeout_ms: int = 1000,
         shutdown_timeout: float = 30.0,
+        middlewares: list[BaseMiddleware] | None = None,
     ):
         self.consumer = consumer
         self.routers = routers
@@ -52,6 +54,7 @@ class KafkaConsumerManager:
         self._message_counter: int = 0
         self._error_counter: int = 0
         self._last_processed_time: float = time.time()
+        self.middlewares = middlewares or []
 
         # Collect all topics from routers
         for router in self.routers:
@@ -181,13 +184,25 @@ class KafkaConsumerManager:
     async def _process_message(self, handler: EventHandler, message: KafkaMessage) -> None:
         """Process a single message with its handler."""
         try:
-            # Solve dependencies
-            cache = DependencyCache()
-            dependant = get_dependant(handler.func)
-            values = await solve_dependencies(dependant, cache)
+            # Create middleware chain
+            async def execute_handler(msg: KafkaMessage) -> Any:
+                # Solve dependencies
+                cache = DependencyCache()
+                dependant = get_dependant(handler.func)
+                values = await solve_dependencies(dependant, cache)
+                # Execute handler
+                return await handler.func(msg, **values)
 
-            # Execute handler
-            await handler.func(message, **values)
+            # Build middleware chain
+            middleware_chain = execute_handler
+            for middleware in reversed(self.middlewares):
+                next_chain = middleware_chain
+
+                def middleware_chain(msg, m=middleware, n=next_chain):
+                    return m(msg, n)
+
+            # Execute middleware chain
+            await middleware_chain(message)
 
         except Exception as e:
             logger.error(f"Error processing message: {e}", exc_info=True)

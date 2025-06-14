@@ -17,8 +17,7 @@ repos:
     rev: v0.11.13
     hooks:
     -   id: ruff
-        args:
-        - --fix
+        args: [--fix, --unsafe-fixes]
     -   id: ruff-format
 #ci:
 #    autofix_commit_msg: 🎨 [pre-commit.ci] Auto format from pre-commit.com hooks

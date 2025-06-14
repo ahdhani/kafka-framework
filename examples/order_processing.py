@@ -7,6 +7,7 @@ from datetime import datetime
 
 from kafka_framework import Depends, KafkaApp, TopicRouter
 from kafka_framework.exceptions import RetryableError
+from kafka_framework.middleware import KafkaLoggerMiddleware
 from kafka_framework.serialization import JSONSerializer
 from kafka_framework.utils.logging import setup_logging
 
@@ -81,6 +82,8 @@ async def handle_order_cancelled(message):
 # Include router in app
 app.include_router(router)
 
+app.add_middleware(KafkaLoggerMiddleware())
+
 
 async def produce_test_messages():
     """Produce some test messages."""
@@ -99,12 +102,14 @@ async def produce_test_messages():
     for order in test_orders:
         if order["status"] == "created":
             await app._producer.send(
+                key=order["id"].encode(),
                 topic="orders",
                 value=order,
                 headers={"data_version": "1.0", "event_name": "order_created"},
             )
         else:
             await app._producer.send(
+                key=order["id"].encode(),
                 topic="orders",
                 value=order,
                 headers={"event_name": "order_cancelled", "data_version": "1.0"},

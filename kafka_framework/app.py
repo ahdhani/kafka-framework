@@ -10,6 +10,7 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
 from .kafka.consumer import KafkaConsumerManager
 from .kafka.producer import KafkaProducerManager
+from .middleware.base import BaseMiddleware
 from .models import KafkaConfig
 from .routing import TopicRouter
 from .serialization import BaseSerializer, JSONSerializer
@@ -53,6 +54,7 @@ class KafkaApp:
         self.dlq_topic_prefix = dlq_topic_prefix
 
         self.routers: list[TopicRouter] = []
+        self.middlewares: list[BaseMiddleware] = []
         self._consumer: KafkaConsumerManager | None = None
         self._producer: KafkaProducerManager | None = None
         self._dlq_handler: DLQHandler | None = None
@@ -74,6 +76,15 @@ class KafkaApp:
             len(topics),
             ", ".join(sorted(topics)),
         )
+
+    def add_middleware(self, middleware: BaseMiddleware) -> None:
+        """Add a middleware to the application.
+
+        Args:
+            middleware: An instance of BaseMiddleware to be added to the processing pipeline.
+        """
+        self.middlewares.append(middleware)
+        logger.info(f"Added middleware: {middleware.__class__.__name__}")
 
     async def _setup_producer(self) -> None:
         """Initialize the Kafka producer."""
@@ -125,6 +136,7 @@ class KafkaApp:
                 max_batch_size=self.consumer_batch_size,
                 consumer_timeout_ms=self.consumer_timeout_ms,
                 shutdown_timeout=self.shutdown_timeout,
+                middlewares=self.middlewares,
             )
             logger.info(
                 "Consumer setup complete. Batch size: %d, Timeout: %dms",
@@ -183,19 +195,6 @@ class KafkaApp:
         except Exception as e:
             logger.error("Error during application shutdown: %s", e, exc_info=True)
             raise
-
-    def get_all_topics_for_migration(self) -> set[str]:
-        """Both topics and its dlq's."""
-        topics = set()
-        for router in self.routers:
-            route_handlers = router.get_route_handler_map()
-            topics.update(router.get_topics())
-            for handler in route_handlers.values():
-                if handler.dlq_topic:
-                    topics.add(handler.dlq_topic)
-
-        logger.info("Found %d topics for migration: %s", len(topics), ", ".join(sorted(topics)))
-        return topics
 
     @asynccontextmanager
     async def lifespan(self):
