@@ -12,7 +12,7 @@ from typing import Any
 from aiokafka import AIOKafkaConsumer
 from aiokafka.structs import ConsumerRecord
 
-from ..dependencies import DependencyCache, solve_dependencies
+from ..dependencies import DependencyCache, get_dependant, solve_dependencies
 from ..models import KafkaMessage, RetryInfo
 from ..routing import EventHandler, TopicRouter
 from ..serialization import BaseSerializer
@@ -83,7 +83,7 @@ class KafkaConsumerManager:
         self.running = False
         logger.info("Stopping consumer manager...")
 
-        # Wait for tasks to complete with timeout
+        # Wait for tasks to complete with timeout #TODO: Need to fix something here
         tasks = [t for t in [self._consumer_task, self._processor_task] if t is not None]
         if tasks:
             done, pending = await asyncio.wait(tasks, timeout=self.shutdown_timeout)
@@ -128,7 +128,6 @@ class KafkaConsumerManager:
         try:
             # Deserialize message value
             value = await self.serializer.deserialize(message.value)
-
             # Create KafkaMessage using the factory method
             kafka_message = KafkaMessage.from_aiokafka(message, value)
 
@@ -184,7 +183,8 @@ class KafkaConsumerManager:
         try:
             # Solve dependencies
             cache = DependencyCache()
-            values = await solve_dependencies(handler, cache)
+            dependant = get_dependant(handler.func)
+            values = await solve_dependencies(dependant, cache)
 
             # Execute handler
             await handler.func(message, **values)

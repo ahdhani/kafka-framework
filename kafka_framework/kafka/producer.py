@@ -60,7 +60,7 @@ class KafkaProducerManager:
             # Convert headers to list of tuples if present
             kafka_headers = None
             if headers:
-                kafka_headers = [(str(k).encode(), str(v).encode()) for k, v in headers.items()]
+                kafka_headers = [(str(k), str(v).encode()) for k, v in headers.items()]
 
             # Send the message
             await self.producer.send(

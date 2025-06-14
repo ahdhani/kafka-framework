@@ -2,6 +2,7 @@
 Main KafkaApp class implementation.
 """
 
+import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -13,6 +14,8 @@ from .models import KafkaConfig
 from .routing import TopicRouter
 from .serialization import BaseSerializer, JSONSerializer
 from .utils.dlq import DLQHandler
+
+logger = logging.getLogger(__name__)
 
 
 class KafkaApp:
@@ -55,102 +58,152 @@ class KafkaApp:
         self._dlq_handler: DLQHandler | None = None
         self._startup_done = False
 
+        logger.info(
+            "Initialized KafkaApp with bootstrap_servers=%s, group_id=%s, client_id=%s",
+            bootstrap_servers,
+            self.group_id,
+            self.client_id,
+        )
+
     def include_router(self, router: TopicRouter) -> None:
         """Add a TopicRouter to the application."""
         self.routers.append(router)
+        topics = router.get_topics()
+        logger.info(
+            "Added router with %d topics: %s",
+            len(topics),
+            ", ".join(sorted(topics)),
+        )
 
     async def _setup_producer(self) -> None:
         """Initialize the Kafka producer."""
-        producer = AIOKafkaProducer(
-            bootstrap_servers=self.bootstrap_servers,
-            client_id=self.client_id,
-            **self.config.producer_config,
-        )
-        self._producer = KafkaProducerManager(
-            producer=producer,
-            serializer=self.serializer,
-        )
+        logger.info("Setting up Kafka producer...")
+        try:
+            producer = AIOKafkaProducer(
+                bootstrap_servers=self.bootstrap_servers,
+                client_id=self.client_id,
+                **self.config.producer_config,
+            )
+            self._producer = KafkaProducerManager(
+                producer=producer,
+                serializer=self.serializer,
+            )
+            logger.info("Kafka producer setup complete")
+        except Exception as e:
+            logger.error("Failed to setup Kafka producer: %s", e, exc_info=True)
+            raise
 
     async def _setup_consumer(self) -> None:
         """Initialize the Kafka consumer."""
-        # First ensure producer is setup for DLQ
-        if not self._producer:
-            await self._setup_producer()
+        logger.info("Setting up Kafka consumer...")
+        try:
+            # First ensure producer is setup for DLQ
+            if not self._producer:
+                logger.info("Setting up producer for DLQ support...")
+                await self._setup_producer()
 
-        # Setup DLQ handler
-        self._dlq_handler = DLQHandler(
-            producer=self._producer,
-            dlq_topic_prefix=self.dlq_topic_prefix,
-        )
+            # Setup DLQ handler
+            self._dlq_handler = DLQHandler(
+                producer=self._producer,
+                dlq_topic_prefix=self.dlq_topic_prefix,
+            )
+            logger.info("DLQ handler initialized with prefix: %s", self.dlq_topic_prefix)
 
-        # Setup consumer
-        consumer = AIOKafkaConsumer(
-            bootstrap_servers=self.bootstrap_servers,
-            group_id=self.group_id,
-            client_id=self.client_id,
-            **self.config.consumer_config,
-        )
+            # Setup consumer
+            consumer = AIOKafkaConsumer(
+                bootstrap_servers=self.bootstrap_servers,
+                group_id=self.group_id,
+                client_id=self.client_id,
+                **self.config.consumer_config,
+            )
 
-        self._consumer = KafkaConsumerManager(
-            consumer=consumer,
-            routers=self.routers,
-            serializer=self.serializer,
-            dlq_handler=self._dlq_handler,
-            max_batch_size=self.consumer_batch_size,
-            consumer_timeout_ms=self.consumer_timeout_ms,
-            shutdown_timeout=self.shutdown_timeout,
-        )
+            self._consumer = KafkaConsumerManager(
+                consumer=consumer,
+                routers=self.routers,
+                serializer=self.serializer,
+                dlq_handler=self._dlq_handler,
+                max_batch_size=self.consumer_batch_size,
+                consumer_timeout_ms=self.consumer_timeout_ms,
+                shutdown_timeout=self.shutdown_timeout,
+            )
+            logger.info(
+                "Consumer setup complete. Batch size: %d, Timeout: %dms",
+                self.consumer_batch_size,
+                self.consumer_timeout_ms,
+            )
+        except Exception as e:
+            logger.error("Failed to setup Kafka consumer: %s", e, exc_info=True)
+            raise
 
     async def start(self) -> None:
         """Start the Kafka application."""
         if self._startup_done:
+            logger.warning("Application already started")
             return
 
-        # Setup components in correct order
-        await self._setup_producer()
-        await self._setup_consumer()
+        logger.info("Starting Kafka application...")
+        try:
+            # Setup components in correct order
+            await self._setup_producer()
+            await self._setup_consumer()
 
-        # Start components
-        if self._producer:
-            await self._producer.start()
-        if self._consumer:
-            await self._consumer.start()
+            # Start components
+            if self._producer:
+                await self._producer.start()
+                logger.info("Producer started successfully")
 
-        self._startup_done = True
+            if self._consumer:
+                await self._consumer.start()
+                logger.info("Consumer started successfully")
+
+            self._startup_done = True
+            logger.info("Kafka application startup complete")
+
+        except Exception as e:
+            logger.error("Failed to start Kafka application: %s", e, exc_info=True)
+            # Attempt cleanup
+            await self.stop()
+            raise
 
     async def stop(self) -> None:
         """Stop the Kafka application."""
-        if self._consumer:
-            await self._consumer.stop()
-        if self._producer:
-            await self._producer.stop()
+        logger.info("Stopping Kafka application...")
+        try:
+            if self._consumer:
+                await self._consumer.stop()
+                logger.info("Consumer stopped successfully")
 
-        self._startup_done = False
+            if self._producer:
+                await self._producer.stop()
+                logger.info("Producer stopped successfully")
 
-    def get_all_topics_for_migration(self):
+            self._startup_done = False
+            logger.info("Kafka application shutdown complete")
+
+        except Exception as e:
+            logger.error("Error during application shutdown: %s", e, exc_info=True)
+            raise
+
+    def get_all_topics_for_migration(self) -> set[str]:
         """Both topics and its dlq's."""
         topics = set()
         for router in self.routers:
             route_handlers = router.get_route_handler_map()
             topics.update(router.get_topics())
             for handler in route_handlers.values():
-                topics.add(handler.dlq_topic)
+                if handler.dlq_topic:
+                    topics.add(handler.dlq_topic)
+
+        logger.info("Found %d topics for migration: %s", len(topics), ", ".join(sorted(topics)))
         return topics
 
     @asynccontextmanager
     async def lifespan(self):
         """Lifespan context manager for the application."""
-        await self.start()
+        logger.info("Entering application lifespan")
         try:
-            yield self
+            await self.start()
+            yield
         finally:
+            logger.info("Exiting application lifespan")
             await self.stop()
-
-    async def __aenter__(self):
-        """Async context manager entry."""
-        await self.start()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        await self.stop()

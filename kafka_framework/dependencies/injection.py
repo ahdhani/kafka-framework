@@ -101,15 +101,34 @@ async def solve_dependencies(
         if sub_dependant.cache_key and cache:
             cached_value = cache.get(sub_dependant.cache_key)
             if cached_value is not None:
-                values[signature.parameters[sub_dependant.call.__name__].name] = cached_value
+                # Find parameter that uses this dependency
+                for param_name, param in signature.parameters.items():
+                    if (
+                        isinstance(param.default, Depends)
+                        and param.default.dependency == sub_dependant.call
+                    ):
+                        values[param_name] = cached_value
+                        break
                 continue
 
         sub_values = await solve_dependencies(sub_dependant, cache)
-        result = await sub_dependant.call(**sub_values)
+
+        # Call dependency function - handle both async and sync functions
+        if inspect.iscoroutinefunction(sub_dependant.call):
+            result = await sub_dependant.call(**sub_values)
+        else:
+            result = sub_dependant.call(**sub_values)
 
         if sub_dependant.cache_key and cache:
             cache.set(sub_dependant.cache_key, result)
 
-        values[signature.parameters[sub_dependant.call.__name__].name] = result
+        # Find parameter that uses this dependency
+        for param_name, param in signature.parameters.items():
+            if (
+                isinstance(param.default, Depends)
+                and param.default.dependency == sub_dependant.call
+            ):
+                values[param_name] = result
+                break
 
     return values

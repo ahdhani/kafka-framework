@@ -46,11 +46,14 @@ class TopicRouter:
             dependant = get_dependant(func)
 
             route = self.get_route(topic, event_name)
+            dlq_topic = topic if dlq_support else None
+            if dlq_postfix is not None:
+                dlq_topic = f"{topic}.{dlq_postfix}"
             self.route_handler_map[route] = EventHandler(
                 func=func,
                 priority=priority,
                 retry_attempts=retry_attempts,
-                dlq_topic=None if dlq_support is False else f"{topic}.{dlq_postfix}",
+                dlq_topic=dlq_topic,
                 dependencies=dependant.dependencies,
             )
             self.topics.add(topic)

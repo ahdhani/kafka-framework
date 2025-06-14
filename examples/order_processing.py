@@ -1,17 +1,26 @@
 """
-Example of using the Kafka framework for order processing.
+Example order processing application using the Kafka framework.
 """
 
-import asyncio
+import logging
 from datetime import datetime
 
 from kafka_framework import Depends, KafkaApp, TopicRouter
 from kafka_framework.exceptions import RetryableError
 from kafka_framework.serialization import JSONSerializer
+from kafka_framework.utils.logging import setup_logging
+
+# Setup logging with debug level and file output
+setup_logging(
+    level=logging.INFO,
+    # log_file="order_processing.log"
+)
+
+logger = logging.getLogger(__name__)
 
 # Create the app instance
 app = KafkaApp(
-    bootstrap_servers=["localhost:9092"],
+    bootstrap_servers=["localhost:9094"],
     group_id="order-processor",
     serializer=JSONSerializer(),
     config={
@@ -43,21 +52,22 @@ def get_config():
 async def handle_order_created(message, db=Depends(get_db), config=Depends(get_config)):
     """Handle order creation events."""
     order = message.value
-    print(f"Processing order {order['id']} at {datetime.now()}")
-    print(f"Using payment gateway: {config['payment_gateway']}")
+    logger.info("Test dependency %s", db)
+
+    # Simulate failure for demonstration
+    logger.info("Processing order %s at %s", order["id"], datetime.now())
+    logger.info("Using payment gateway: %s", config["payment_gateway"])
 
     # Simulate order processing
     await asyncio.sleep(1)
-    print(f"Order {order['id']} processed successfully")
+    logger.info("Order %s processed successfully", order["id"])
 
 
-@router.topic_event(
-    "orders", "order_cancelled", priority=2, retry_attempts=3, dlq_topic="orders_dlq"
-)
+@router.topic_event("orders", "order_cancelled", priority=2, retry_attempts=3)
 async def handle_order_cancelled(message):
     """Handle order cancellation events."""
     order = message.value
-    print(f"Cancelling order {order['id']} at {datetime.now()}")
+    logger.info("Cancelling order %s at %s", order["id"], datetime.now())
 
     # Simulate failure for demonstration
     if order.get("simulate_failure"):
@@ -65,7 +75,7 @@ async def handle_order_cancelled(message):
 
     # Simulate cancellation
     await asyncio.sleep(1)
-    print(f"Order {order['id']} cancelled successfully")
+    logger.info("Order %s cancelled successfully", order["id"])
 
 
 # Include router in app
@@ -90,17 +100,17 @@ async def produce_test_messages():
         if order["status"] == "created":
             await app._producer.send(
                 topic="orders",
-                value={"event": "order_created", "data": order},
-                headers={"data_version": "1.0"},
+                value=order,
+                headers={"data_version": "1.0", "event_name": "order_created"},
             )
         else:
             await app._producer.send(
                 topic="orders",
-                value={"event": "order_cancelled", "data": order},
-                headers={"data_version": "1.0"},
+                value=order,
+                headers={"event_name": "order_cancelled", "data_version": "1.0"},
             )
 
-        print(f"Produced message for order {order['id']}")
+        logger.info("Produced message for order %s", order["id"])
 
 
 async def main():
@@ -114,8 +124,12 @@ async def main():
             while True:
                 await asyncio.sleep(1)
         except KeyboardInterrupt:
-            print("\nShutting down...")
+            logger.info("Shutting down...")
 
 
 if __name__ == "__main__":
+    import asyncio
+
+    logger.info("Starting order processing service...")
+
     asyncio.run(main())

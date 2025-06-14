@@ -2,6 +2,7 @@
 Message models for Kafka messages and headers.
 """
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -46,11 +47,10 @@ class KafkaMessage:
     @classmethod
     def from_aiokafka(cls, message: Any, deserialized_value: Any) -> "KafkaMessage":
         """Create a KafkaMessage from an aiokafka message."""
-        headers_dict = dict(message.headers) if message.headers else {}
-
+        headers_dict = {x[0]: x[1].decode() for x in message.headers} if message.headers else {}
         retry_info = None
         if "retry" in headers_dict:
-            retry_data = headers_dict["retry"]
+            retry_data = json.loads(headers_dict["retry"])
             retry_info = RetryInfo(
                 topic=retry_data["topic"],
                 partition=retry_data["partition"],
@@ -64,10 +64,11 @@ class KafkaMessage:
             timestamp=datetime.fromtimestamp(message.timestamp / 1000),
             data_version=headers_dict.get("data_version", "1.0"),
             retry=retry_info,
+            event_name=headers_dict.get("event_name"),
             custom_headers={
-                k: v
+                k: v.decode()
                 for k, v in headers_dict.items()
-                if k not in ["data_version", "retry", "timestamp"]
+                if k not in ["data_version", "retry", "timestamp", "event_name"]
             },
         )
 
@@ -79,3 +80,6 @@ class KafkaMessage:
             offset=message.offset,
             key=message.key,
         )
+
+    def __lt__(self, other):  # TODO : Fix properly
+        return self.partition < other.partition
