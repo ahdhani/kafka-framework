@@ -24,12 +24,13 @@ class DLQHandler:
         self.producer = producer
         self.dlq_topic_prefix = dlq_topic_prefix
 
-    def get_dlq_topic(self, original_topic: str) -> str:
+    def get_dlq_topic(self, dlq_topic: str) -> str:
         """Get the DLQ topic name for an original topic."""
-        return f"{self.dlq_topic_prefix}.{original_topic}"
+        return f"{self.dlq_topic_prefix}.{dlq_topic}"
 
     async def send_to_dlq(
         self,
+        dlq_topic: str,
         message: KafkaMessage,
         error: Exception,
         context: dict[str, Any] | None = None,
@@ -38,11 +39,12 @@ class DLQHandler:
         Send a failed message to the DLQ.
 
         Args:
+            dlq_topic: Name of the DLQ topic
             message: Original Kafka message
             error: Exception that caused the failure
             context: Additional context about the failure
         """
-        dlq_topic = self.get_dlq_topic(message.topic)
+        dlq_topic = self.get_dlq_topic(dlq_topic)
 
         # Create DLQ message headers
         dlq_headers = {

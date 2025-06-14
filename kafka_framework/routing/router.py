@@ -36,7 +36,8 @@ class TopicRouter:
         *,
         priority: int = 1,
         retry_attempts: int = 0,
-        dlq_topic: str | None = None,
+        dlq_support: bool = True,
+        dlq_postfix: str | None = None,
     ) -> Callable:
         """Decorator for registering topic event handlers."""
 
@@ -49,7 +50,7 @@ class TopicRouter:
                 func=func,
                 priority=priority,
                 retry_attempts=retry_attempts,
-                dlq_topic=dlq_topic,
+                dlq_topic=None if dlq_support is False else f"{topic}.{dlq_postfix}",
                 dependencies=dependant.dependencies,
             )
             self.topics.add(topic)

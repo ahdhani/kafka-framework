@@ -12,6 +12,7 @@ from .kafka.producer import KafkaProducerManager
 from .models import KafkaConfig
 from .routing import TopicRouter
 from .serialization import BaseSerializer, JSONSerializer
+from .utils.dlq import DLQHandler
 
 
 class KafkaApp:
@@ -28,6 +29,10 @@ class KafkaApp:
         client_id: str | None = None,
         serializer: BaseSerializer | None = None,
         config: dict[str, Any] | None = None,
+        consumer_batch_size: int = 100,
+        consumer_timeout_ms: int = 1000,
+        shutdown_timeout: float = 30.0,
+        dlq_topic_prefix: str = "dlq",
     ):
         if isinstance(bootstrap_servers, str):
             bootstrap_servers = [bootstrap_servers]
@@ -38,28 +43,21 @@ class KafkaApp:
         self.serializer = serializer or JSONSerializer()
         self.config = KafkaConfig(**(config or {}))
 
+        # Consumer settings
+        self.consumer_batch_size = consumer_batch_size
+        self.consumer_timeout_ms = consumer_timeout_ms
+        self.shutdown_timeout = shutdown_timeout
+        self.dlq_topic_prefix = dlq_topic_prefix
+
         self.routers: list[TopicRouter] = []
         self._consumer: KafkaConsumerManager | None = None
         self._producer: KafkaProducerManager | None = None
+        self._dlq_handler: DLQHandler | None = None
         self._startup_done = False
 
     def include_router(self, router: TopicRouter) -> None:
         """Add a TopicRouter to the application."""
         self.routers.append(router)
-
-    async def _setup_consumer(self) -> None:
-        """Initialize the Kafka consumer."""
-        consumer = AIOKafkaConsumer(
-            bootstrap_servers=self.bootstrap_servers,
-            group_id=self.group_id,
-            client_id=self.client_id,
-            **self.config.consumer_config,
-        )
-        self._consumer = KafkaConsumerManager(
-            consumer=consumer,
-            routers=self.routers,
-            serializer=self.serializer,
-        )
 
     async def _setup_producer(self) -> None:
         """Initialize the Kafka producer."""
@@ -73,18 +71,50 @@ class KafkaApp:
             serializer=self.serializer,
         )
 
+    async def _setup_consumer(self) -> None:
+        """Initialize the Kafka consumer."""
+        # First ensure producer is setup for DLQ
+        if not self._producer:
+            await self._setup_producer()
+
+        # Setup DLQ handler
+        self._dlq_handler = DLQHandler(
+            producer=self._producer,
+            dlq_topic_prefix=self.dlq_topic_prefix,
+        )
+
+        # Setup consumer
+        consumer = AIOKafkaConsumer(
+            bootstrap_servers=self.bootstrap_servers,
+            group_id=self.group_id,
+            client_id=self.client_id,
+            **self.config.consumer_config,
+        )
+
+        self._consumer = KafkaConsumerManager(
+            consumer=consumer,
+            routers=self.routers,
+            serializer=self.serializer,
+            dlq_handler=self._dlq_handler,
+            max_batch_size=self.consumer_batch_size,
+            consumer_timeout_ms=self.consumer_timeout_ms,
+            shutdown_timeout=self.shutdown_timeout,
+        )
+
     async def start(self) -> None:
         """Start the Kafka application."""
         if self._startup_done:
             return
 
-        await self._setup_consumer()
+        # Setup components in correct order
         await self._setup_producer()
+        await self._setup_consumer()
 
-        if self._consumer:
-            await self._consumer.start()
+        # Start components
         if self._producer:
             await self._producer.start()
+        if self._consumer:
+            await self._consumer.start()
 
         self._startup_done = True
 
@@ -96,6 +126,16 @@ class KafkaApp:
             await self._producer.stop()
 
         self._startup_done = False
+
+    def get_all_topics_for_migration(self):
+        """Both topics and its dlq's."""
+        topics = set()
+        for router in self.routers:
+            route_handlers = router.get_route_handler_map()
+            topics.update(router.get_topics())
+            for handler in route_handlers.values():
+                topics.add(handler.dlq_topic)
+        return topics
 
     @asynccontextmanager
     async def lifespan(self):
