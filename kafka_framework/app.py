@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 class KafkaApp:
     """
     Main application class for the Kafka framework.
-    Similar to FastAPI's FastAPI class.
     """
 
     def __init__(

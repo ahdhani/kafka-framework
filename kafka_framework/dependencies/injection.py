@@ -1,7 +1,3 @@
-"""
-Dependency injection system inspired by FastAPI.
-"""
-
 import inspect
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -22,7 +18,6 @@ class Dependant:
 class Depends:
     """
     Declare dependencies to be injected.
-    Similar to FastAPI's Depends.
     """
 
     def __init__(
