@@ -1,7 +1,3 @@
-"""
-FastAPI-style Kafka framework for building event-driven applications.
-"""
-
 from .app import KafkaApp
 from .dependencies import Depends
 from .models import KafkaMessage

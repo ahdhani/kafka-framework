@@ -1,7 +1,7 @@
 [project]
 name = "kafka-framework"
-version = "0.1.0"
-description = "A FastAPI-style Python framework for Kafka-based applications"
+version = "0.1.4"
+description = "A Python framework for Kafka-based applications"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
