@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from aiokafka import ConsumerRecord
+
 
 @dataclass
 class RetryInfo:
@@ -45,7 +47,7 @@ class KafkaMessage:
     key: bytes | None = None
 
     @classmethod
-    def from_aiokafka(cls, message: Any, deserialized_value: Any) -> "KafkaMessage":
+    def from_aiokafka(cls, message: ConsumerRecord, deserialized_value: Any) -> "KafkaMessage":
         """Create a KafkaMessage from an aiokafka message."""
         headers_dict = {x[0]: x[1].decode() for x in message.headers} if message.headers else {}
         retry_info = None

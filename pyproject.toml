@@ -22,6 +22,14 @@ avro = ["fastavro>=1.8.0"]
 protobuf = ["protobuf>=4.23.3"]
 all = ["fastavro>=1.8.0", "protobuf>=4.23.3"]
 
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.0.0",
+]
+lint = [
+    "ruff>=0.11.13",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
