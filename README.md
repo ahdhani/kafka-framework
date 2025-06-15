@@ -12,10 +12,15 @@
 ## ✨ Why Kafka Framework?
 
 ✅ **FastAPI-like routing** using decorators
+
 ✅ **Built-in dependency injection** system
+
 ✅ **Priority-based message processing**
+
 ✅ **Retry and DLQ** support
+
 ✅ **Plug-and-play serialization** (JSON, Avro, Protobuf)
+
 ✅ **Built for async** using [`aiokafka`](https://github.com/aio-libs/aiokafka)
 
 ---
