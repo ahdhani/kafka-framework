@@ -1,165 +1,142 @@
 # Kafka Framework
 
-A FastAPI-inspired framework for building Kafka applications in Python with a focus on developer experience and robust features.
+[![PyPI version](https://img.shields.io/pypi/v/kafka-framework?color=blue)](https://pypi.org/project/kafka-framework/)
+[![CI](https://github.com/ahdhani/kafka-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/hani0x/kafka-framework/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code Style: ruff](https://img.shields.io/badge/style-ruff-blue)](https://github.com/astral-sh/ruff)
 
-## Features
+> A **FastAPI-inspired framework** to build production-grade Kafka applications effortlessly, with support for routing, DI, retries, DLQ, and custom serialization.
 
-- FastAPI-style routing with decorators
-- Dependency injection system
-- Pluggable serialization (JSON, Protobuf, Avro)
-- Priority-based message processing
-- Configurable retry mechanism with exception filtering
-- Dead Letter Queue (DLQ) support
-- Async/await patterns using aiokafka
-- Type hints throughout
+---
 
-## Installation
+## ✨ Why Kafka Framework?
 
-Basic installation:
+✅ **FastAPI-like routing** using decorators
+✅ **Built-in dependency injection** system
+✅ **Priority-based message processing**
+✅ **Retry and DLQ** support
+✅ **Plug-and-play serialization** (JSON, Avro, Protobuf)
+✅ **Built for async** using [`aiokafka`](https://github.com/aio-libs/aiokafka)
+
+---
+
+## 📦 Installation
+
+### Basic
+
 ```bash
 pip install kafka-framework
 ```
 
-With Avro support:
+### With Avro support
+
 ```bash
 pip install kafka-framework[avro]
 ```
 
-With all extras:
+### All extras
+
 ```bash
 pip install kafka-framework[all]
 ```
 
-## Quick Start
+---
+
+## ⚡ Quick Start
 
 ```python
 from kafka_framework import KafkaApp, TopicRouter, Depends
 from kafka_framework.serialization import JSONSerializer
 
-# Create the app instance
 app = KafkaApp(
     bootstrap_servers=["localhost:9092"],
     group_id="my-consumer-group",
     serializer=JSONSerializer()
 )
 
-# Create a router
 router = TopicRouter()
 
-# Define dependencies
+# Dependencies
 async def get_db():
-    # Return database connection
     return {"connection": "db"}
 
 def get_config():
     return {"env": "production"}
 
-# Define event handlers
-@router.topic_event("orders", "order_created", priority=1)
+@router.topic_event(topic="orders", event_name="order_created", priority=1)
 async def handle_order_created(message, db=Depends(get_db), config=Depends(get_config)):
-    order = message.value
-    print(f"Processing order {order['id']} with config {config}")
-    # Process order...
+    print(f"Processing order {message.value['id']}")
 
 @router.topic_event(
-    "orders",
-    "order_cancelled",
+    topic="orders",
+    event_name="order_cancelled",
     priority=2,
     retry_attempts=3,
-    dlq_topic="orders_dlq"
+    dlq_postfix="cancelled"
 )
 async def handle_order_cancelled(message):
-    order = message.value
-    print(f"Cancelling order {order['id']}")
-    # Cancel order...
+    print(f"Cancelling order {message.value['id']}")
 
-# Include router in app
 app.include_router(router)
 
-# Run the app
-async def main():
-    async with app.lifespan():
-        await app.start()
-
+# Entry point
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(main())
+    asyncio.run(app.start())
 ```
 
-## Advanced Features
+---
 
-### Priority-based Processing
+## 🧹 Core Concepts
 
-Messages are processed based on handler priority (higher numbers first):
+### 🔁 Priority-Based Processing
+
+Handlers with higher priority run first:
 
 ```python
-@router.topic_event("notifications", "high_priority", priority=10)
-async def handle_high_priority(message):
-    # Processed first
-    pass
+@router.topic_event("notifications", "vip", priority=10)
+async def handle_vip(message): ...
 
-@router.topic_event("notifications", "low_priority", priority=1)
-async def handle_low_priority(message):
-    # Processed after high priority
-    pass
+@router.topic_event("notifications", "normal", priority=1)
+async def handle_normal(message): ...
 ```
 
-### Retry Mechanism
+---
 
-Configure retries with exponential backoff:
+### 💀 Dead Letter Queue (DLQ)
+
+Unprocessed or failed messages are pushed to DLQ.
 
 ```python
-from kafka_framework.kafka import RetryConfig
-from kafka_framework.exceptions import RetryableError
-
-retry_config = RetryConfig(
-    max_attempts=3,
-    initial_delay=1.0,
-    max_delay=60.0,
-    exponential_base=2.0,
-    exceptions=[RetryableError]
-)
-
-@router.topic_event(
-    "payments",
-    "payment_processed",
-    retry_attempts=3,
-    retry_config=retry_config
-)
-async def handle_payment(message):
-    # Will retry up to 3 times with exponential backoff
-    pass
+@router.topic_event("orders", "order_created", dlq_postfix="created")
+async def handle_order(message): ...
 ```
 
-### Dead Letter Queue (DLQ)
+---
 
-Handle failed messages with DLQ:
+### 🧪 Retry Logic
+
+Retries failed handlers before DLQ fallback:
 
 ```python
-@router.topic_event(
-    "orders",
-    "order_created",
-    dlq_topic="orders_dlq"
-)
-async def handle_order(message):
-    # Failed messages will be sent to orders_dlq topic
-    pass
+@router.topic_event("orders", "fail", retry_attempts=5)
+async def flaky_handler(message): ...
 ```
 
-### Custom Serialization
+---
 
-Use Avro serialization (requires kafka-framework[avro]):
+### 🧬 Custom Serialization
+
+Supports JSON, Protobuf, and Avro.
 
 ```python
 from kafka_framework.serialization import AvroSerializer
+import json
 
 schema = {
     "type": "record",
     "name": "Order",
-    "fields": [
-        {"name": "id", "type": "string"},
-        {"name": "amount", "type": "double"}
-    ]
+    "fields": [{"name": "id", "type": "string"}, {"name": "amount", "type": "double"}]
 }
 
 app = KafkaApp(
@@ -171,50 +148,20 @@ app = KafkaApp(
 )
 ```
 
-### Message Headers
+---
 
-Access message headers and metadata:
-
-```python
-@router.topic_event("orders", "order_created")
-async def handle_order(message):
-    # Access message data
-    order_data = message.value
-
-    # Access message headers
-    print(f"Data version: {message.headers.data_version}")
-    print(f"Timestamp: {message.headers.timestamp}")
-
-    # Access retry information (if being retried)
-    if message.headers.retry:
-        print(f"Retry count: {message.headers.retry.retry_count}")
-        print(f"Last retry: {message.headers.retry.last_retried_timestamp}")
-```
-
-## Configuration
-
-### Consumer Configuration
+## ⚙️ Configuration
 
 ```python
-app = KafkaApp(
+KafkaApp(
     bootstrap_servers=["localhost:9092"],
-    group_id="my-group",
+    group_id="your-group",
     config={
         "consumer_config": {
             "auto_offset_reset": "earliest",
             "enable_auto_commit": True,
             "max_poll_records": 500
-        }
-    }
-)
-```
-
-### Producer Configuration
-
-```python
-app = KafkaApp(
-    bootstrap_servers=["localhost:9092"],
-    config={
+        },
         "producer_config": {
             "acks": "all",
             "compression_type": "gzip",
@@ -224,10 +171,44 @@ app = KafkaApp(
 )
 ```
 
-## Contributing
+---
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## 🤝 Contributing
 
-## License
+We welcome contributions! Here’s how you can help:
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+* 🤛 Open issues
+* ✍️ Submit PRs
+* 🗨️ Discuss improvements
+* 📚 Improve docs and examples
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) to get started.
+
+---
+
+## 🧭 Roadmap
+
+* [ ] Documentation
+* [ ] Admin/monitoring interface
+* [ ] Kafka Streams integration
+* [ ] Auto-schema registry
+* [ ] CLI tooling
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License. See [LICENSE](./LICENSE) for details.
+
+---
+
+## 🌎 Links
+
+* 📘 [Documentation (coming soon)](https://github.com/ahdhani/kafka-framework/wiki)
+* 🐍 [PyPI package](https://pypi.org/project/kafka-framework/)
+* 🔧 [GitHub Actions CI](https://github.com/ahdhani/kafka-framework/actions)
+* 💬 [Discussions](https://github.com/ahdhani/kafka-framework/discussions) (coming soon)
+
+---
+
+**Build Kafka consumers like web APIs — clean, testable, async-ready.**
