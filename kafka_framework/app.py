@@ -70,7 +70,7 @@ class KafkaApp:
         """Add a TopicRouter to the application."""
         self.routers.append(router)
         topics = router.get_topics()
-        logger.info(
+        logger.debug(
             "Added router with %d topics: %s",
             len(topics),
             ", ".join(sorted(topics)),
@@ -83,7 +83,7 @@ class KafkaApp:
             middleware: An instance of BaseMiddleware to be added to the processing pipeline.
         """
         self.middlewares.append(middleware)
-        logger.info(f"Added middleware: {middleware.__class__.__name__}")
+        logger.debug(f"Added middleware: {middleware.__class__.__name__}")
 
     async def _setup_producer(self) -> None:
         """Initialize the Kafka producer."""
@@ -117,7 +117,7 @@ class KafkaApp:
                 producer=self._producer,
                 dlq_topic_prefix=self.dlq_topic_prefix,
             )
-            logger.info("DLQ handler initialized with prefix: %s", self.dlq_topic_prefix)
+            logger.debug("DLQ handler initialized with prefix: %s", self.dlq_topic_prefix)
 
             # Setup consumer
             consumer = AIOKafkaConsumer(

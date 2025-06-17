@@ -9,13 +9,6 @@ from kafka_framework import Depends, KafkaApp, TopicRouter
 from kafka_framework.exceptions import RetryableError
 from kafka_framework.middleware import KafkaLoggerMiddleware
 from kafka_framework.serialization import JSONSerializer
-from kafka_framework.utils.logging import setup_logging
-
-# Setup logging with debug level and file output
-setup_logging(
-    level=logging.INFO,
-    # log_file="order_processing.log"
-)
 
 logger = logging.getLogger(__name__)
 
