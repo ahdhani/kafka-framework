@@ -28,10 +28,12 @@ class KafkaProducerManager:
     async def start(self) -> None:
         """Start the producer."""
         await self.producer.start()
+        logger.info("Producer manager started")
 
     async def stop(self) -> None:
         """Stop the producer."""
         await self.producer.stop()
+        logger.info("Producer manager stopped")
 
     async def send(
         self,
@@ -74,4 +76,15 @@ class KafkaProducerManager:
 
         except Exception as e:
             logger.error(f"Error sending message to {topic}: {e}")
+            raise
+
+    async def flush(self) -> None:
+        """
+        Flush all buffered messages.
+        This ensures all messages are actually sent to Kafka.
+        """
+        try:
+            await self.producer.flush()
+        except Exception as e:
+            logger.error(f"Error flushing messages: {e}")
             raise
