@@ -3,6 +3,7 @@ Avro serializer implementation.
 """
 
 import json
+from io import BytesIO
 from typing import Any
 
 try:
@@ -42,11 +43,14 @@ class AvroSerializer(BaseSerializer):
         value: Any,
     ) -> bytes:
         """Serialize a value to Avro bytes."""
-        return fastavro.schemaless_writer(value, self.parsed_schema)
+        out = BytesIO()
+        fastavro.schemaless_writer(out, self.parsed_schema, value)
+        return out.getvalue()
 
     async def deserialize(
         self,
         value: bytes,
     ) -> Any:
         """Deserialize Avro bytes to a value."""
-        return fastavro.schemaless_reader(value, self.parsed_schema)
+        out = BytesIO(value)
+        return fastavro.schemaless_reader(out, self.parsed_schema)
