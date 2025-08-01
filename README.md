@@ -1,7 +1,7 @@
 # Kafka Framework
 
 [![PyPI version](https://img.shields.io/pypi/v/kafka-framework?color=blue)](https://pypi.org/project/kafka-framework/)
-[![CI](https://github.com/ahdhani/kafka-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/hani0x/kafka-framework/actions/workflows/ci.yml)
+[![CI](https://github.com/ahdhani/kafka-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/ahdhani/kafka-framework/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code Style: ruff](https://img.shields.io/badge/style-ruff-blue)](https://github.com/astral-sh/ruff)
 
